@@ -39,6 +39,12 @@ declare var __TEST__: string;
 declare var __STAGING__: string;
 declare var __IS_ES6__: string;
 
+declare var $_VERSION: string;
+declare var $_DEV: string;
+declare var $_TEST: string;
+declare var $_STAGING: string;
+declare var $_IS_ES6: string;
+
 declare function fetch(...args): Promise<any>;
 
 declare var Headers: any;

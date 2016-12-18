@@ -18,7 +18,7 @@
     "allowUnusedLabels": true,
     "skipLibCheck": false,
     "skipDefaultLibCheck": false,
-    "outDir": "build/typescript"
+    "outDir": "build/javascript"
   },
   "include": [
     "src/**/*",

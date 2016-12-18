@@ -16,7 +16,7 @@
 
      WARNING: Removed on each build.
      */
-    path: "./build"
+    tempDirectory: "./build"
   },
   test: {
     server: {

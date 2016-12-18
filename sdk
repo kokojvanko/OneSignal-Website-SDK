@@ -9,6 +9,7 @@ const chalk = require('chalk');
 const nconf = require('nconf');
 const json5 = require('json5');
 const spawn = require('child_process').spawn;
+const fs = require('fs-extra');
 
 
 const argv = yargs
@@ -67,26 +68,103 @@ function onBuild(argv) {
   console.log('OneSignal Web SDK Build Tool');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   printEnvironment(config);
-  transpileTypescript(config);
-  runModuleBundler(config);
+  return clean(config)
+         .then(() => transpileTypescript(config))
+         .then(() => runModuleBundler(config))
+         .catch(e => console.error(chalk.red(`Fatal build error: ${e}`)));
 }
 
+function clean(config) {
+  return new Promise((resolve, reject) => {
+    const rmDir = spawn('rm', ['-r', config.get('build:tempDirectory')]);
+    rmDir.stdout.on('data', data => {
+      console.log(`${chalk.blue('[Clean]')} ${data.toString()}`);
+    });
+    rmDir.stderr.on('data', function (data) {
+      console.error(chalk.red(`${chalk.blue('[Clean]')} ${data.toString()}`));
+    });
+    rmDir.on('exit', function (code) {
+      if (code !== 0) {
+        reject(chalk.red(`${chalk.blue('[Clean]')} 'rm' exited with code ${code}`));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+/**
+ * Transpiles source TypeScript files to individual JavaScript files based on passed tsconfig.json.
+ *
+ * Watches for changes to source TypeScript files (even over VMWare network file system!).
+ */
 function transpileTypescript(config) {
-  const transpiler = spawn('tsc', ['--project', 'tsconfig.es5.json', '--watch']);
-  transpiler.stdout.on('data', data => {
-    console.log(`${chalk.blue('[Transpile TypeScript]')} ${data.toString()}`);
-  });
-  transpiler.stderr.on('data', function (data) {
-    console.error(chalk.white.bgRed(`${chalk.blue('[Transpile TypeScript]')} ${error}`));
+  return new Promise((resolve, reject) => {
+    const transpiler = spawn('tsc', ['--project', 'tsconfig.es5.json', '--watch']);
+    transpiler.stdout.on('data', data => {
+      const message = data.toString();
+      console.log(`${chalk.blue('[TypeScript Transpiler]')} ${message}`);
+      if (message.includes('Compilation complete.')) {
+        resolve();
+      }
+    });
+    transpiler.stderr.on('data', function (data) {
+      console.error(chalk.red(`${chalk.blue('[TypeScript Transpiler]')} ${data.toString()}`));
+    });
+    transpiler.on('exit', function (code) {
+      if (code !== 0) {
+        reject(chalk.red(`${chalk.blue('[TypeScript Transpiler]')} 'tsc' exited with code ${code}`));
+      } else {
+        resolve();
+      }
+    });
   });
 }
 
+/**
+ * Watches for changes to TypeScript transpiler's generated JavaScript files, and bundles all JavaScript files
+ * together into one bundle. Pipeline transformations are as follows:
+ *
+ * 1. Bundle JS files into one module.
+ * 2. Bundle SCSS files into one CSS file.
+ * 3. Replaces $_VAR preprocessor variables for things like $_VERSION and $_DEV.
+ * 4. Minifies the CSS using clean-css.
+ * 5. Minifies the JavaScript using UglifyJS.
+ * 6. Transforms multi-level source map back to original source map using Sorcery.
+ * 7. Copies output files to target output directory.
+ *
+ * These transformations are controlled by the brunch-config.js file.
+ */
 function runModuleBundler(config) {
-  const transpiler = spawn('brunch', ['watch']);
-  transpiler.stdout.on('data', data => {
-    console.log(`${chalk.blue('[Module Bundler]')} ${data.toString()}`);
+  return new Promise((resolve, reject) => {
+    const bundler = spawn('brunch', ['watch']);
+    bundler.stdout.on('data', data => {
+      const message = data.toString();
+      console.log(`${chalk.blue('[Module Bundler]')} ${message}`);
+      if (message.includes('info: compiled')) {
+        transformSourceMaps();
+      }
+    });
+    bundler.stderr.on('data', function (data) {
+      console.error(chalk.red(`${chalk.blue('[Module Bundler]')} ${data.toString()}`));
+    });
+    bundler.on('exit', function (code) {
+      if (code !== 0) {
+        reject(chalk.red(`${chalk.blue('[Module Bundler]')} 'brunch' exited with code ${code}`));
+      } else {
+        resolve();
+      }
+    });
   });
-  transpiler.stderr.on('data', function (data) {
-    console.error(chalk.white.bgRed(`${chalk.blue('[Module Bundler]')} ${error}`));
-  });
+}
+
+/**
+ * 6. Transforms multi-level source map back to original source map using Sorcery.
+ *
+ * For some reason, Sorcery requires the file and map to be at the project root.
+ *
+ * Copy src/map to root -> Apply Sorcery -> Copy files to build/bundler-sourcemapped/ -> Remove copies
+ */
+function transformSourceMaps() {
+  fs.move('/build/bundler')
 }
