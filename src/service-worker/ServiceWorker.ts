@@ -32,7 +32,7 @@ class ServiceWorker {
    * previous version.
    */
   static get VERSION() {
-    return __VERSION__;
+    return Environment.version();
   }
 
   /**
@@ -642,7 +642,7 @@ class ServiceWorker {
   static onServiceWorkerInstalled(event) {
     // At this point, the old service worker is still in control
     log.debug(`Called %conServiceWorkerInstalled(${JSON.stringify(event, null, 4)}):`, getConsoleStyle('code'), event);
-    log.info(`Installing service worker: %c${(self as any).location.pathname}`, getConsoleStyle('code'), `(version ${__VERSION__})`);
+    log.info(`Installing service worker: %c${(self as any).location.pathname}`, getConsoleStyle('code'), `(version ${Environment.version()})`);
 
     if (contains((self as any).location.pathname, "OneSignalSDKWorker.js"))
       var serviceWorkerVersionType = 'WORKER1_ONE_SIGNAL_SW_VERSION';
@@ -651,7 +651,7 @@ class ServiceWorker {
 
 
     event.waitUntil(
-        Database.put("Ids", {type: serviceWorkerVersionType, id: __VERSION__})
+        Database.put("Ids", {type: serviceWorkerVersionType, id: Environment.version()})
             .then(() => self.skipWaiting())
     );
   }
@@ -984,10 +984,10 @@ class ServiceWorker {
 (self as any).OneSignalWorker = ServiceWorker;
 
 // Set logging to the appropriate level
-log.setDefaultLevel(__DEV__ ? (log as any).levels.TRACE : (log as any).levels.ERROR);
+log.setDefaultLevel(Environment.isDev() ? (log as any).levels.TRACE : (log as any).levels.ERROR);
 
 // Print it's happy time!
-log.info(`%cOneSignal Service Worker loaded (version ${__VERSION__}, ${Environment.getEnv()} environment).`, getConsoleStyle('bold'));
+log.info(`%cOneSignal Service Worker loaded (version ${Environment.version()}, ${Environment.getEnv()} environment).`, getConsoleStyle('bold'));
 
 // Run our main file
 ServiceWorker.run();

@@ -716,8 +716,8 @@ export default class OneSignal {
   }
 
   static __doNotShowWelcomeNotification: boolean;
-  static VERSION = __VERSION__;
-  static _VERSION = __VERSION__;
+  static VERSION = Environment.version();
+  static _VERSION = Environment.version();
   static _API_URL = API_URL;
   static _notificationOpenedCallbacks = [];
   static _idsAvailable_callback = [];

@@ -14,7 +14,7 @@ import Dialog from './Dialog';
 import Message from './Message';
 
 import SubscriptionHelper from "../helpers/SubscriptionHelper";
-var logoSvg = require('raw!./../assets/bell.svg');
+var logoSvg;
 
 
 export default class Bell {
@@ -138,7 +138,7 @@ export default class Bell {
       offset: offset,
     };
 
-    require('./bell.scss');
+    require('../../../src/bell/bell.scss');
 
     if (!this.options.enable)
       return;

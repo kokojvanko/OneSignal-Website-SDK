@@ -18,10 +18,7 @@
     "allowUnusedLabels": true,
     "skipLibCheck": false,
     "skipDefaultLibCheck": false,
-    "outDir": "build",
-    "awesomeTypescriptLoaderOptions": {
-      "useCache": false
-    }
+    "outDir": "build"
   },
   "include": [
     "src/**/*",

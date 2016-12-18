@@ -16,7 +16,7 @@ export default class Environment {
   }
 
   static isEs6DebuggingModule() {
-    return __IS_ES6__;
+    return $_IS_ES6;
   }
 
   static getEnv() {
@@ -85,15 +85,19 @@ export default class Environment {
   }
 
   static isStaging() {
-    return __STAGING__;
+    return $_STAGING;
   }
 
   static isDev() {
-    return __DEV__;
+    return $_DEV;
+  }
+
+  static version() {
+    return $_VERSION;
   }
 
   static isTest() {
-    return __TEST__;
+    return $_TEST;
   }
 
   static isCustomSubdomain() {
