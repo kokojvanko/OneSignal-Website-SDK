@@ -1,16 +1,22 @@
+var {bundlerOutDir, typescriptOutDir} = process.env;
+
+const path = require('path');
+
+var entryPoints = {};
+
+entryPoints[`${typescriptOutDir}/src/entry.js`] = 'bundle-sdk.js';
+entryPoints[`${typescriptOutDir}/test/integration/entry.js`] = 'bundle-integration-tests.js';
+
 module.exports = {
   paths: {
     // Build directory output path
-    public: 'build/bundler',
+    public: bundlerOutDir,
     // Paths watched by brunch
-    watched: ['build/javascript']
+    watched: [typescriptOutDir]
   },
   files: {
     javascripts: {
-      entryPoints: {
-        'build/javascript/src/entry.js': 'bundle-sdk.js',
-        'build/javascript/test/integration/entry.js': 'bundle-integration-tests.js'
-      }
+      entryPoints: entryPoints
     },
     stylesheets: {
       joinTo: 'bundle.css'
@@ -18,7 +24,7 @@ module.exports = {
   },
   modules: {
     autoRequire: {
-      'app.js': ['build/javascript/src/entry']
+      'bundle-sdk.js': [`${typescriptOutDir}/src/entry`]
     }
   },
   /**
@@ -45,10 +51,10 @@ module.exports = {
        */
       pattern: /^bundle\.js$/,
       values: {
-        _DEV: true,
+        _DEV: false,
         _TEST: false,
         _STAGING: false,
-        _IS_ES6: true,
+        _IS_ES6: false,
         _VERSION: JSON.stringify(require("./package.json").sdkVersion),
       }
     },
@@ -93,6 +99,35 @@ module.exports = {
       },
       output: {
         comments: false
+      }
+    }
+  },
+  overrides: {
+    development: {
+      plugins: {
+        jscc: {
+          values: {
+            _DEV: true
+          }
+        }
+      }
+    },
+    test: {
+      plugins: {
+        jscc: {
+          values: {
+            _TEST: true
+          }
+        }
+      }
+    },
+    staging: {
+      plugins: {
+        jscc: {
+          values: {
+            _STAGING: true
+          }
+        }
       }
     }
   }

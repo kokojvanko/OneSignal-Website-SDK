@@ -10,6 +10,7 @@ const nconf = require('nconf');
 const json5 = require('json5');
 const spawn = require('child_process').spawn;
 const fs = require('fs-extra');
+const path = require('path');
 
 
 const argv = yargs
@@ -76,7 +77,12 @@ function onBuild(argv) {
 
 function clean(config) {
   return new Promise((resolve, reject) => {
-    const rmDir = spawn('rm', ['-r', config.get('build:tempDirectory')]);
+    const rmDir = spawn('rm', [
+      '--recursive',
+      '--preserve-root',
+      '--force',
+      config.get('build:tempDirectory')
+    ]);
     rmDir.stdout.on('data', data => {
       console.log(`${chalk.blue('[Clean]')} ${data.toString()}`);
     });
@@ -100,7 +106,13 @@ function clean(config) {
  */
 function transpileTypescript(config) {
   return new Promise((resolve, reject) => {
-    const transpiler = spawn('tsc', ['--project', 'tsconfig.es5.json', '--watch']);
+    const transpiler = spawn('tsc', [
+      '--project',
+      'tsconfig.es5.json',
+      '--watch',
+      '--outDir',
+      config.get("build:typescriptOutDir")
+    ]);
     transpiler.stdout.on('data', data => {
       const message = data.toString();
       console.log(`${chalk.blue('[TypeScript Transpiler]')} ${message}`);
@@ -136,17 +148,43 @@ function transpileTypescript(config) {
  * These transformations are controlled by the brunch-config.js file.
  */
 function runModuleBundler(config) {
+  const env = config.get('env');
   return new Promise((resolve, reject) => {
-    const bundler = spawn('brunch', ['watch']);
+    const enableIgnoredMessagesPattern = true;
+    const ignoredMessagePatterns = [
+      /config.overrides.*perhaps you meant/,
+      ///The correct use of entry points is/,
+      /compiled, but not written. Check/
+    ];
+    const bundler = spawn('brunch', [
+      'watch',
+      '--env',
+      env,
+      '--jobs',
+      '3',
+    ], {
+      env: Object.assign(Object.create(process.env), {
+        bundlerOutDir: config.get('build:bundlerOutDir'),
+        typescriptOutDir: config.get('build:typescriptOutDir')
+      })
+    });
     bundler.stdout.on('data', data => {
       const message = data.toString();
       console.log(`${chalk.blue('[Module Bundler]')} ${message}`);
       if (message.includes('info: compiled')) {
-        transformSourceMaps();
+        transformSourceMaps(config)
+        distributeReleaseFiles(config);
       }
     });
     bundler.stderr.on('data', function (data) {
-      console.error(chalk.red(`${chalk.blue('[Module Bundler]')} ${data.toString()}`));
+      const message = data.toString();
+      if (enableIgnoredMessagesPattern) {
+        for (const ignoredMessagePattern of ignoredMessagePatterns) {
+          if (message.match(ignoredMessagePattern))
+            return;
+        }
+      }
+      console.error(chalk.red(`${chalk.blue('[Module Bundler]')} ${message}`));
     });
     bundler.on('exit', function (code) {
       if (code !== 0) {
@@ -165,6 +203,51 @@ function runModuleBundler(config) {
  *
  * Copy src/map to root -> Apply Sorcery -> Copy files to build/bundler-sourcemapped/ -> Remove copies
  */
-function transformSourceMaps() {
-  fs.move('/build/bundler')
+function transformSourceMaps(config) {
+  try {
+    const bundlerOutDir = config.get('build:bundlerOutDir');
+    const bundledFilenames = fs.walkSync(path.resolve(bundlerOutDir))
+                               .map(file => file.slice(file.lastIndexOf('/') + 1));
+    fs.copySync(bundlerOutDir, './');
+
+    var transformPromises = [];
+    bundledFilenames.map(filename => {
+      if (!filename.endsWith('.js'))
+        return;
+
+      transformPromises.push(
+        new Promise((resolve, reject) => {
+          var sorcerer = spawn('sorcery', [
+            '--input',
+            filename,
+          ]);
+          sorcerer.stdout.on('data', data => {
+            const message = data.toString();
+            console.log(`${chalk.blue('[Transform Source Maps]')} ${message}`);
+          });
+          sorcerer.stderr.on('data', function (data) {
+            console.error(chalk.red(`${chalk.blue('[Transform Source Maps]')} ${data.toString()}`));
+          });
+          sorcerer.on('exit', function (code) {
+            if (code !== 0) {
+              reject(chalk.red(`${chalk.blue('[Transform Source Maps]')} 'sorcery' exited with code ${code}`));
+            } else {
+              console.log(`${chalk.blue('[Transform Source Maps]')} Transformed source map for ${chalk.blue(filename)}`);
+              fs.copySync(filename + '.map', `${bundlerOutDir}/${filename + '.map'}`);
+              fs.removeSync(filename);
+              fs.removeSync(filename + '.map');
+              resolve();
+            }
+          });
+        }));
+    });
+
+    return Promise.all(transformPromises);
+  } catch (e) {
+    console.error(`${chalk.blue('[Transform Source Maps]')} ${chalk.red(e)}`);
+  }
+}
+
+function distributeReleaseFiles() {
+
 }

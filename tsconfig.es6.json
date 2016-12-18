@@ -17,8 +17,7 @@
     "allowUnreachableCode": true,
     "allowUnusedLabels": true,
     "skipLibCheck": false,
-    "skipDefaultLibCheck": false,
-    "outDir": "build/javascript"
+    "skipDefaultLibCheck": false
   },
   "include": [
     "src/**/*",

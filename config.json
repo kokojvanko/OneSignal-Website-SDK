@@ -16,7 +16,12 @@
 
      WARNING: Removed on each build.
      */
-    tempDirectory: "./build"
+    tempDirectory: "build",
+    /**
+     * The directory to output the transpiled TypeScript files to. Overrides tsconfig.json.
+     */
+    typescriptOutDir: "build/javascript",
+    bundlerOutDir: "build/bundler"
   },
   test: {
     server: {
