@@ -1,0 +1,92 @@
+#! /usr/bin/env node
+
+const yargonaut = require('yargonaut')
+                          .style('blue', 'required')
+                          .errorsStyle('red.bold')
+                          .helpStyle('green')
+const yargs = require('yargs');
+const chalk = require('chalk');
+const nconf = require('nconf');
+const json5 = require('json5');
+const spawn = require('child_process').spawn;
+
+
+const argv = yargs
+  .usage('★ OneSignal Web SDK Build Tool ★')
+  .help('help').alias('help', 'h')
+  .wrap(120)
+  .option('env', {
+    alias: 'e',
+    choices: ['development', 'staging', 'production'],
+    description: `The target environment for this build.`,
+    requiresArg: true,
+    type: 'string',
+    required: true,
+    default: 'development',
+    global: true,
+  })
+  .option('config', {
+    alias: 'c',
+    description: `Path to config.json file.`,
+    requiresArg: true,
+    required: true,
+    default: './config.json',
+    global: true
+  })
+  .command({
+    command: 'build',
+    aliases: 'b',
+    desc: `Builds the web SDK.  
+           Optionally add '--tests' to build with tests.`,
+    handler: onBuild
+  })
+  .example('./sdk build --tests', 'Build the web SDK for development (default) with tests.')
+  .example('./sdk build --env prod', 'Build the web SDK for production.')
+  .strict()
+  .demand(1)
+  .argv;
+
+function printEnvironment(config) {
+  let env = config.get('env')
+  let color = chalk.white.bgBlue;
+  if (env === 'staging') {
+    color = chalk.white.bgMagenta;
+  }
+  else if (env === 'production') {
+    color = chalk.white.bgRed;
+  }
+  console.log(`${chalk.blue('Environment:')} ${color(env.toUpperCase())}`)
+  console.log(`${chalk.blue('Current Working Directory:')} ${process.cwd()}`)
+  console.log();
+}
+
+function onBuild(argv) {
+  var config = nconf.env()
+                    .file({ file: argv.config, format: json5 });
+  config.set('env', argv.env);
+  console.log('OneSignal Web SDK Build Tool');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  printEnvironment(config);
+  transpileTypescript(config);
+  runModuleBundler(config);
+}
+
+function transpileTypescript(config) {
+  const transpiler = spawn('tsc', ['--project', 'tsconfig.es5.json', '--watch']);
+  transpiler.stdout.on('data', data => {
+    console.log(`${chalk.blue('[Transpile TypeScript]')} ${data.toString()}`);
+  });
+  transpiler.stderr.on('data', function (data) {
+    console.error(chalk.white.bgRed(`${chalk.blue('[Transpile TypeScript]')} ${error}`));
+  });
+}
+
+function runModuleBundler(config) {
+  const transpiler = spawn('brunch', ['watch']);
+  transpiler.stdout.on('data', data => {
+    console.log(`${chalk.blue('[Module Bundler]')} ${data.toString()}`);
+  });
+  transpiler.stderr.on('data', function (data) {
+    console.error(chalk.white.bgRed(`${chalk.blue('[Module Bundler]')} ${error}`));
+  });
+}

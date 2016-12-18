@@ -1,9 +1,9 @@
 module.exports = {
   paths: {
     // Build directory output path
-    public: 'dist-brunch',
+    public: 'build/bundler',
     // Paths watched by brunch
-    watched: ['build/src']
+    watched: ['build/typescript/src']
   },
   files: {
     javascripts: {
@@ -15,11 +15,11 @@ module.exports = {
   },
   modules: {
     autoRequire: {
-      'javascripts/app.js': ['OneSignal']
+      'app.js': ['build/typescript/src/entry']
     }
   },
   plugins: {
-    on: ['javascript-brunch', 'sass-brunch', 'jscc-brunch'],
+    on: ['typescript-brunch', 'javascript-brunch', 'sass-brunch', 'jscc-brunch'],
     jscc: {
       values: {
         _DEV: true,
