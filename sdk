@@ -36,6 +36,16 @@ const argv = yargs
     default: './config.json',
     global: true
   })
+  .option('tests', {
+    alias: 't',
+    description: `Include this flag to build tests as well.
+                  Increases compilation time.`,
+    requiresArg: false,
+    required: false,
+    type: 'boolean',
+    default: false,
+    global: true
+  })
   .command({
     command: 'build',
     aliases: 'b',
@@ -72,6 +82,10 @@ function onBuild(argv) {
   var config = nconf.env()
                     .file({ file: argv.config, format: json5 });
   config.set('env', argv.env);
+  config.set('tests', argv.tests);
+  if (!argv.tests) {
+    config.set('build:typescriptOutDir', config.get('build:typescriptOutDir') + '/src');
+  }
   console.log('OneSignal Web SDK Build Tool');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   printEnvironment(config);
@@ -113,13 +127,24 @@ function clean(config) {
 function transpileTypescript(config) {
   stats.lastTypeScriptChangeDetected = microtime.now();
   return new Promise((resolve, reject) => {
-    const transpiler = spawn('tsc', [
-      '--project',
-      'tsconfig.es5.json',
-      '--watch',
-      '--outDir',
-      config.get("build:typescriptOutDir")
-    ]);
+    let transpiler = null;
+    if (config.get('tests')) {
+      transpiler = spawn('tsc', [
+        '--project',
+        'tsconfig.json',
+        '--watch',
+        '--outDir',
+        config.get("build:typescriptOutDir")
+      ]);
+    } else {
+      transpiler = spawn('tsc', [
+        '--project',
+        'tsconfig.notests.json',
+        '--watch',
+        '--outDir',
+        config.get("build:typescriptOutDir")
+      ]);
+    }
     transpiler.stdout.on('data', data => {
       const message = data.toString();
       console.log(`${chalk.blue('[TypeScript Transpiler]')} ${message}`);

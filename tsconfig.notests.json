@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+    "allowUnreachableCode": true,
+    "allowUnusedLabels": true,
+    "alwaysStrict": true,
+    "diagnostics": true,
+    "forceConsistentCasingInFileNames": true,
+    "importHelpers": true,
+    "lib": ["es5",
+      "es2015.promise",
+      "es2015.collection",
+      "dom",
+      "scripthost"
+    ],
+    "module": "commonjs",
+    "noEmitHelpers": true,
+    "pretty": true,
+    "skipDefaultLibCheck": false,
+    "skipLibCheck": false,
+    "sourceMap": true,
+    "target": "es5",
+    "types": ["node"]
+  },
+  "include": ["src/**/*",
+    "typings/**/*"
+  ]
+}
