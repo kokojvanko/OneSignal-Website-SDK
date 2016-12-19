@@ -215,47 +215,87 @@ function runModuleBundler(config) {
  */
 function transformSourceMaps(config) {
   try {
-    const bundlerOutDir = config.get('build:bundlerOutDir');
-    const bundledFilenames = walkSync(path.resolve(bundlerOutDir))
-                               .map(file => file.slice(file.lastIndexOf('/') + 1));
-    fs.copySync(bundlerOutDir, './');
+    const prefix = getBuildPrefix(config);
+    const buildDir = config.get('build:bundlerOutDir');
+    const bundledFilenames = walkSync(path.resolve(buildDir))
+                            .map(file => file.slice(file.lastIndexOf('/') + 1));
+    fs.copySync(buildDir, './');
 
+    const railsProjectRoot = path.resolve(config.get('build:railsProjectRoot'));
+    const railsPublicDir = railsProjectRoot + '/public';
+    const railsPublicSdksDir = railsProjectRoot + '/public/sdks';
+    const sdkBundleName = config.get('build:sdkBundleName');
+    const integrationTestsBundleName = config.get('build:integrationTestsBundleName');
+    const unitTestsBundleName = config.get('build:unitTestsBundleName');
+
+    /**
+     * Copy: dist/OneSignalSDK.js  ==>  OneSignal/public/sdks/OneSignalSDK.js
+     *                                  OneSignal/public/sdks/OneSignalSDKWorker.js
+     *                                  OneSignal/public/OneSignalSDKWorker.js
+     *                                  OneSignal/public/OneSignalSDKUpdaterWorker.js
+     *
+     * Copy: dist/OneSignalSDK.js.map  ==>  OneSignal/public/sdks/OneSignalSDK.js.map
+     *                                    OneSignal/public/sdks/OneSignalSDKWorker.js.map
+     *                                    OneSignal/public/OneSignalSDKWorker.js.map
+     *                                    OneSignal/public/OneSignalSDKUpdaterWorker.js.map
+     */
     var transformPromises = [];
+
     bundledFilenames.map(filename => {
       if (!filename.endsWith('.js'))
         return;
-
       transformPromises.push(
-        new Promise((resolve, reject) => {
-          var sorcerer = spawn('sorcery', [
-            '--input',
-            filename,
-          ]);
-          sorcerer.stdout.on('data', data => {
-            const message = data.toString();
-            console.log(`${chalk.blue('[Transform Source Maps]')} ${message}`);
-          });
-          sorcerer.stderr.on('data', function (data) {
-            console.error(chalk.red(`${chalk.blue('[Transform Source Maps]')} ${data.toString()}`));
-          });
-          sorcerer.on('exit', function (code) {
-            if (code !== 0) {
-              reject(chalk.red(`${chalk.blue('[Transform Source Maps]')} 'sorcery' exited with code ${code}`));
-            } else {
-              console.log(`${chalk.blue('[Transform Source Maps]')} Transformed source map for ${chalk.blue(filename)}`);
-              fs.copySync(filename + '.map', `${bundlerOutDir}/${filename + '.map'}`);
-              fs.removeSync(filename);
-              fs.removeSync(filename + '.map');
-              resolve();
-            }
-          });
-        }));
+        transformSourceMapHelperMultiple(`${sdkBundleName}`, [
+          `${railsPublicSdksDir}/${prefix}OneSignalSDK.js`,
+          `${railsPublicSdksDir}/${prefix}OneSignalSDKWorker.js`,
+          `${railsPublicDir}/${prefix}OneSignalSDKWorker.js`,
+          `${railsPublicDir}/${prefix}OneSignalSDKUpdaterWorker.js`
+        ])
+      )
     });
 
-    return Promise.all(transformPromises);
+    return Promise.all(transformPromises)
+                  .then(() => {
+                    bundledFilenames.map(filename => {
+                      fs.removeSync(filename);
+                      fs.removeSync(filename + '.map');
+
+                    });
+                  });
+
   } catch (e) {
     console.error(`${chalk.blue('[Transform Source Maps]')} ${chalk.red(e)}`);
   }
+}
+
+function transformSourceMapHelperMultiple(input, outputs) {
+  return Promise.all(outputs.map(output => transformSourceMapHelper(input, output)));
+}
+
+function transformSourceMapHelper(input, output) {
+  return new Promise((resolve, reject) => {
+    var sorcerer = spawn('sorcery', [
+      '--input',
+      input,
+      '--output',
+      output
+    ]);
+    sorcerer.stdout.on('data', data => {
+      const message = data.toString();
+      console.log(`${chalk.blue('[Transform Source Maps]')} ${message}`);
+    });
+    sorcerer.stderr.on('data', function (data) {
+      console.error(chalk.red(`${chalk.blue('[Transform Source Maps]')} ${data.toString()}`));
+    });
+    sorcerer.on('exit', function (code) {
+      if (code !== 0) {
+        reject(chalk.red(`${chalk.blue('[Transform Source Maps]')} 'sorcery' exited with code ${code}`));
+      } else {
+        console.log(`${chalk.blue('[Transform Source Maps]')} Generated new file from ${chalk.blue(input)} --> ${chalk.blue(output)}/.map`);
+        resolve();
+      }
+    });
+  });
 }
 
 /**
@@ -270,42 +310,6 @@ function getBuildPrefix(config) {
   } else {
     return '';
   }
-}
-
-function distributeReleaseFiles(config) {
-  const prefix = getBuildPrefix(config);
-  const buildDir = config.get('build:bundlerOutDir');
-  const railsProjectRoot = path.resolve(config.get('build:railsProjectRoot'));
-  const railsPublicDir = railsProjectRoot + '/public';
-  const railsPublicSdksDir = railsProjectRoot + '/public/sdks';
-  const sdkBundleName = config.get('build:sdkBundleName');
-  const integrationTestsBundleName = config.get('build:integrationTestsBundleName');
-  const unitTestsBundleName = config.get('build:unitTestsBundleName');
-
-  /**
-   * Copy: dist/OneSignalSDK.js  ==>  OneSignal/public/sdks/OneSignalSDK.js
-   *                                  OneSignal/public/sdks/OneSignalSDKWorker.js
-   *                                  OneSignal/public/OneSignalSDKWorker.js
-   *                                  OneSignal/public/OneSignalSDKUpdaterWorker.js
-   *
-   * Copy: dist/OneSignalSDK.js.map  ==>  OneSignal/public/sdks/OneSignalSDK.js.map
-     *                                    OneSignal/public/sdks/OneSignalSDKWorker.js.map
-     *                                    OneSignal/public/OneSignalSDKWorker.js.map
-     *                                    OneSignal/public/OneSignalSDKUpdaterWorker.js.map
-   */
-  cloneFile(`${buildDir}/${sdkBundleName}`, [
-    `${railsPublicSdksDir}/${prefix}OneSignalSDK.js`,
-    `${railsPublicSdksDir}/${prefix}OneSignalSDKWorker.js`,
-    `${railsPublicDir}/${prefix}OneSignalSDKWorker.js`,
-    `${railsPublicDir}/${prefix}OneSignalSDKUpdaterWorker.js`
-  ]);
-
-  cloneFile(`${buildDir}/${sdkBundleName}.map`, [
-    `${railsPublicSdksDir}/${prefix}OneSignalSDK.js.map`,
-    `${railsPublicSdksDir}/${prefix}OneSignalSDKWorker.js.map`,
-    `${railsPublicDir}/${prefix}OneSignalSDKWorker.js.map`,
-    `${railsPublicDir}/${prefix}OneSignalSDKUpdaterWorker.js.map`
-  ]);
 }
 
 function cloneFile(srcPath, cloneTargetPaths) {
@@ -333,7 +337,6 @@ function walkSync(dir, filelist) {
  */
 function runPostModuleBuilderPipeline(config) {
   transformSourceMaps(config)
-    .then(() => distributeReleaseFiles(config))
     .then(() => {
       console.log();
       const timeDeltaMs = Math.round((microtime.now() - stats.lastTypeScriptChangeDetected) / 1000);

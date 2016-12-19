@@ -1,6 +1,7 @@
 var {bundlerOutDir, typescriptOutDir, sdkBundleName, integrationTestsBundleName, unitTestsBundleName} = process.env;
 
 const path = require('path');
+const fs = require('fs');
 
 var entryPoints = {};
 
@@ -50,7 +51,6 @@ module.exports = {
       /**
        * Only pre-process the final bundle.js (one large file vs. many smaller files).
        */
-      pattern: /^bundle\.js$/,
       values: {
         _DEV: false,
         _TEST: false,
@@ -110,7 +110,8 @@ module.exports = {
           values: {
             _DEV: true
           }
-        }
+        },
+        off: ['uglify-js-brunch']
       }
     },
     test: {
