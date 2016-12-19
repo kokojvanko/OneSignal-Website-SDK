@@ -21,7 +21,11 @@
      * The directory to output the transpiled TypeScript files to. Overrides tsconfig.json.
      */
     typescriptOutDir: "build/javascript",
-    bundlerOutDir: "build/bundler"
+    bundlerOutDir: "build/bundler",
+    sdkBundleName: 'bundle-sdk.js',
+    integrationTestsBundleName: 'bundle-integration-tests.js',
+    unitTestsBundleName: 'bundle-unit-tests.js',
+    railsProjectRoot: "/home/jpang/code/OneSignal"
   },
   test: {
     server: {

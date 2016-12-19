@@ -30,5 +30,5 @@ else if (Environment.isServiceWorker()) {
   // We're running as the service worker
 
   var ServiceWorker = require('./service-worker/ServiceWorker');
-  (window as any).ServiceWorker = ServiceWorker;
+  (self as any).OneSignalWorker = ServiceWorker;
 }

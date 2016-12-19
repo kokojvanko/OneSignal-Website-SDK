@@ -1,11 +1,14 @@
-var {bundlerOutDir, typescriptOutDir} = process.env;
+var {bundlerOutDir, typescriptOutDir, sdkBundleName, integrationTestsBundleName, unitTestsBundleName} = process.env;
 
 const path = require('path');
 
 var entryPoints = {};
 
-entryPoints[`${typescriptOutDir}/src/entry.js`] = 'bundle-sdk.js';
-entryPoints[`${typescriptOutDir}/test/integration/entry.js`] = 'bundle-integration-tests.js';
+entryPoints[`${typescriptOutDir}/src/entry.js`] = sdkBundleName;
+entryPoints[`${typescriptOutDir}/test/integration/entry.js`] = integrationTestsBundleName;
+
+var autoRequire = {};
+autoRequire[sdkBundleName] = [`${typescriptOutDir}/src/entry`];
 
 module.exports = {
   paths: {
@@ -23,9 +26,7 @@ module.exports = {
     }
   },
   modules: {
-    autoRequire: {
-      'bundle-sdk.js': [`${typescriptOutDir}/src/entry`]
-    }
+    autoRequire: autoRequire
   },
   /**
    * WARNING: For now, Brunch pipeline execution order is defined by the brunch plugins in the package.
@@ -129,6 +130,10 @@ module.exports = {
           }
         }
       }
+    },
+    production: {
+      optimize: true,
+      sourceMaps: true
     }
   }
 };

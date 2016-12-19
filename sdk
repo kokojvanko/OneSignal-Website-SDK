@@ -11,6 +11,7 @@ const json5 = require('json5');
 const spawn = require('child_process').spawn;
 const fs = require('fs-extra');
 const path = require('path');
+const microtime = require('microtime')
 
 
 const argv = yargs
@@ -47,6 +48,11 @@ const argv = yargs
   .strict()
   .demand(1)
   .argv;
+
+const stats = {
+  lastTypeScriptChangeDetected: microtime.now(),
+  isIncremental: false
+};
 
 function printEnvironment(config) {
   let env = config.get('env')
@@ -105,6 +111,7 @@ function clean(config) {
  * Watches for changes to source TypeScript files (even over VMWare network file system!).
  */
 function transpileTypescript(config) {
+  stats.lastTypeScriptChangeDetected = microtime.now();
   return new Promise((resolve, reject) => {
     const transpiler = spawn('tsc', [
       '--project',
@@ -118,6 +125,9 @@ function transpileTypescript(config) {
       console.log(`${chalk.blue('[TypeScript Transpiler]')} ${message}`);
       if (message.includes('Compilation complete.')) {
         resolve();
+      } else if (message.includes('File change detected. Starting incremental compilation')) {
+        stats.isIncremental = true;
+        stats.lastTypeScriptChangeDetected = microtime.now();
       }
     });
     transpiler.stderr.on('data', function (data) {
@@ -142,8 +152,6 @@ function transpileTypescript(config) {
  * 3. Replaces $_VAR preprocessor variables for things like $_VERSION and $_DEV.
  * 4. Minifies the CSS using clean-css.
  * 5. Minifies the JavaScript using UglifyJS.
- * 6. Transforms multi-level source map back to original source map using Sorcery.
- * 7. Copies output files to target output directory.
  *
  * These transformations are controlled by the brunch-config.js file.
  */
@@ -165,15 +173,17 @@ function runModuleBundler(config) {
     ], {
       env: Object.assign(Object.create(process.env), {
         bundlerOutDir: config.get('build:bundlerOutDir'),
-        typescriptOutDir: config.get('build:typescriptOutDir')
+        typescriptOutDir: config.get('build:typescriptOutDir'),
+        sdkBundleName: config.get('build:sdkBundleName'),
+        integrationTestsBundleName: config.get('build:integrationTestsBundleName'),
+        unitTestsBundleName: config.get('build:unitTestsBundleName'),
       })
     });
     bundler.stdout.on('data', data => {
       const message = data.toString();
       console.log(`${chalk.blue('[Module Bundler]')} ${message}`);
       if (message.includes('info: compiled')) {
-        transformSourceMaps(config)
-        distributeReleaseFiles(config);
+        runPostModuleBuilderPipeline(config);
       }
     });
     bundler.stderr.on('data', function (data) {
@@ -206,7 +216,7 @@ function runModuleBundler(config) {
 function transformSourceMaps(config) {
   try {
     const bundlerOutDir = config.get('build:bundlerOutDir');
-    const bundledFilenames = fs.walkSync(path.resolve(bundlerOutDir))
+    const bundledFilenames = walkSync(path.resolve(bundlerOutDir))
                                .map(file => file.slice(file.lastIndexOf('/') + 1));
     fs.copySync(bundlerOutDir, './');
 
@@ -248,6 +258,92 @@ function transformSourceMaps(config) {
   }
 }
 
-function distributeReleaseFiles() {
+/**
+ * Returns Dev- for dev builds, Staging- for staging builds.
+ */
+function getBuildPrefix(config) {
+  const env = config.get('env');
+  if (env === "staging") {
+    return 'Staging-';
+  } else if (env === "development") {
+    return 'Dev-';
+  } else {
+    return '';
+  }
+}
 
+function distributeReleaseFiles(config) {
+  const prefix = getBuildPrefix(config);
+  const buildDir = config.get('build:bundlerOutDir');
+  const railsProjectRoot = path.resolve(config.get('build:railsProjectRoot'));
+  const railsPublicDir = railsProjectRoot + '/public';
+  const railsPublicSdksDir = railsProjectRoot + '/public/sdks';
+  const sdkBundleName = config.get('build:sdkBundleName');
+  const integrationTestsBundleName = config.get('build:integrationTestsBundleName');
+  const unitTestsBundleName = config.get('build:unitTestsBundleName');
+
+  /**
+   * Copy: dist/OneSignalSDK.js  ==>  OneSignal/public/sdks/OneSignalSDK.js
+   *                                  OneSignal/public/sdks/OneSignalSDKWorker.js
+   *                                  OneSignal/public/OneSignalSDKWorker.js
+   *                                  OneSignal/public/OneSignalSDKUpdaterWorker.js
+   *
+   * Copy: dist/OneSignalSDK.js.map  ==>  OneSignal/public/sdks/OneSignalSDK.js.map
+     *                                    OneSignal/public/sdks/OneSignalSDKWorker.js.map
+     *                                    OneSignal/public/OneSignalSDKWorker.js.map
+     *                                    OneSignal/public/OneSignalSDKUpdaterWorker.js.map
+   */
+  cloneFile(`${buildDir}/${sdkBundleName}`, [
+    `${railsPublicSdksDir}/${prefix}OneSignalSDK.js`,
+    `${railsPublicSdksDir}/${prefix}OneSignalSDKWorker.js`,
+    `${railsPublicDir}/${prefix}OneSignalSDKWorker.js`,
+    `${railsPublicDir}/${prefix}OneSignalSDKUpdaterWorker.js`
+  ]);
+
+  cloneFile(`${buildDir}/${sdkBundleName}.map`, [
+    `${railsPublicSdksDir}/${prefix}OneSignalSDK.js.map`,
+    `${railsPublicSdksDir}/${prefix}OneSignalSDKWorker.js.map`,
+    `${railsPublicDir}/${prefix}OneSignalSDKWorker.js.map`,
+    `${railsPublicDir}/${prefix}OneSignalSDKUpdaterWorker.js.map`
+  ]);
+}
+
+function cloneFile(srcPath, cloneTargetPaths) {
+  for (const cloneTargetPath of cloneTargetPaths) {
+    console.log(`${chalk.blue('[Distribute Files]')} Copy ${chalk.blue(srcPath)} --> ${chalk.blue(cloneTargetPath)}`);
+    fs.copySync(srcPath, cloneTargetPath);
+  }
+}
+
+function walkSync(dir, filelist) {
+  var files = fs.readdirSync(dir)
+  filelist = filelist || []
+  files.forEach(function (file) {
+    var nestedPath = path.join(dir, file)
+    filelist.push(nestedPath)
+  })
+  return filelist;
+}
+
+/**
+ * Occurs after Brunch finishes.
+ *
+ * 6. Transforms multi-level source map back to original source map using Sorcery.
+ * 7. Copies output files to target output directory.
+ */
+function runPostModuleBuilderPipeline(config) {
+  transformSourceMaps(config)
+    .then(() => distributeReleaseFiles(config))
+    .then(() => {
+      console.log();
+      const timeDeltaMs = Math.round((microtime.now() - stats.lastTypeScriptChangeDetected) / 1000);
+      if (stats.isIncremental) {
+        console.log(`${chalk.yellow('[Incremental Build Finished]')} Finished in ${chalk.blue(timeDeltaMs)} ms`);
+      } else {
+        console.log(`${chalk.yellow('[Initial Build Finished]')} Finished in ${chalk.blue(timeDeltaMs + ' ms')} `);
+      }
+      console.log();
+      console.log(Array(process.stdout.columns).join('┄'));
+      console.log();
+    });
 }
